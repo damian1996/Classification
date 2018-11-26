@@ -2,7 +2,7 @@ import sys, csv, random, math, queue
 from copy import deepcopy
 from igraph import *
 from random import choice
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt, numpy as np
 
 class Node:
     def __init__(self, used_already):
@@ -44,7 +44,7 @@ class Decisive_Tree:
             csv_reader = csv.reader(csv_file, delimiter=',')
             line_count = 0
             for row in csv_reader:
-                if line_count > 2000:
+                if line_count > 4000:
                     break
                 line = row[0].split(';')
                 if line_count == 0:
@@ -65,19 +65,16 @@ class Decisive_Tree:
         self.test = self.values[int(((train_ratio+valid_ratio)*n)/all_ratio):]
 
     def get_labels(self, data):
-        number_of_samples = len(data)
-        id_label = self.features
-        labels = [data[i][id_label] for i in range(number_of_samples)]
-        unique_labels = sorted(list(set(labels)))
-        return (id_label, labels, unique_labels)
+        labels = [data[i][-1] for i in range(len(data))]
+        return (labels, list(set(labels)))
 
     def compute_labels_distribution(self, labels, unique_labels):
         return [labels.count(el)/len(labels) for el in unique_labels]
 
     def compute_entropy(self, data):
-        id_label, labels, unique_labels = self.get_labels(data)
+        labels, unique_labels = self.get_labels(data)
         labels_distro = self.compute_labels_distribution(labels, unique_labels)
-        return sum(-1*pi*math.log(pi, 2) for pi in labels_distro)
+        return sum([pi*math.log(1.0/pi, 2) for pi in labels_distro])
 
     def information_gain(self, f_id, t_ex_id, entropy, data):
         smaller = [data[i] for i in range(len(data)) if data[t_ex_id][f_id] >= data[i][f_id]]
@@ -88,12 +85,15 @@ class Decisive_Tree:
         g_entropy = self.compute_entropy(greater)
         return (entropy - (prob_smaller*s_entropy + prob_greater*g_entropy), smaller, greater)
 
-    def feature_choice(self, entropy, data, used_already):
+    def feature_choice(self, data, used_already):
         maxIG = (-1, 0, 0, [], [])
+        entropy = self.compute_entropy(data)
         for i in range(self.features):
             if not used_already[i]:
                 for j,v in enumerate(data):
                     inf_gain = self.information_gain(i, j, entropy, data)
+                    if inf_gain[0] < 0:
+                        print("Oho... mam buga...", inf_gain[0])
                     if maxIG[0] < inf_gain[0]:
                         maxIG = (inf_gain[0], i, j, inf_gain[1], inf_gain[2])
         used_already[maxIG[1]] = True
@@ -101,8 +101,7 @@ class Decisive_Tree:
 
     def create_tree(self):
         threshold = 8
-        entropy = self.compute_entropy(self.train)
-        maxIG, fea_id, split_id, s, g = self.feature_choice(entropy, self.train, self.used_in_tree)
+        maxIG, fea_id, split_id, s, g = self.feature_choice(self.train, self.used_in_tree)
         self.used_in_tree[fea_id] = True
         self.root = Node(deepcopy(self.used_in_tree))
         self.root.set_all(self.train[split_id][fea_id], fea_id, self.nodesCnt, self.train)
@@ -121,7 +120,7 @@ class Decisive_Tree:
             else:
                 node.create_right(deepcopy(node.get_used()))
             node = node.left if side == "left" else node.right
-            maxIG, fea_id, split_id, s, g = self.feature_choice(entropy, data, node.get_used())
+            maxIG, fea_id, split_id, s, g = self.feature_choice(data, node.get_used())
             node.used_feature(fea_id)
             self.nodesCnt += 1
             node.set_all(data[split_id][fea_id], fea_id, self.nodesCnt, data)
@@ -142,12 +141,12 @@ class Decisive_Tree:
             t = self.root # shallow copy starczy? a moze by wgl nie kopiowac.. yup
             while True:
                 if t.left is None and t.right is None:
-                    #randomLabel = choice(t.labels)
+                    #label = choice(t.labels)
                     u_labels = set(t.labels)
                     cnt_labels = [(l, t.labels.count(l)) for l in u_labels]
                     label = max(cnt_labels, key=lambda x: x[1])
-                    result.append(sample[-1])
-                    predicted_result.append(label[0])
+                    result.append(int(sample[-1]))
+                    predicted_result.append(int(label[0]))
                     #result.append((sample[-1], randomLabel))
                     break
                 elif t.left is None:
@@ -157,7 +156,6 @@ class Decisive_Tree:
                 else:
                     t = t.right if sample[t.feature_id] > t.threshold else t.left
         return ("Accuracy obtained on test data is %f" % self.calculate_accuracy(result, predicted_result), result, predicted_result)
-        #print("Accuracy obtained on test data is %f" % self.calculate_accuracy(result))        
 
     def prune_tree(self):
         pass
@@ -194,15 +192,20 @@ def draw_plot_for_labels(result, res_labels, predicted_labels):
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         sys.exit()
-    #print("Enter train_ratio, test_ratio and valid_ratio for data:")
-    #train_ratio, valid_ratio, test_ratio = map(int, sys.stdin.readline().split())
-    #tree.create_dataset(train_ratio, valid_ratio, test_ratio)
     for i in range(5):
         tree = Decisive_Tree(str(sys.argv[1]))
+        '''
+        print("Do you want to enter proportions?\nDefault = 0\nCustom = 1")
+        if map(int, sys.stdin.readline()):
+            print("Enter train_ratio, test_ratio and valid_ratio for data:")
+            train_ratio, valid_ratio, test_ratio = map(int, sys.stdin.readline().split())
+            tree.create_dataset(train_ratio, valid_ratio, test_ratio)
+        else:
+            tree.create_dataset()
+        '''
         tree.create_dataset()
         tree.create_tree()
         result, res_labels, predicted_labels = tree.evaluate_tree()
         #draw_plot_for_labels(result, res_labels, predicted_labels)
         #draw_decision_tree(tree)
         print(result)
-    # moze wykres tego ile poszczegolnych quality spudlowal? info ktore predykuje lepiej

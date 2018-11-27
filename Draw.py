@@ -6,6 +6,8 @@ def bfs(node, g, tree):
     if node == None:
         return
     g.vs[node.node_id]["name"] = "%s" % (tree.columns[node.feature_id])
+    #if node.left is not None and node.right is not None:
+    #    print(node.left.node_id, " ", node.right.node_id)
     if node.left != None and node.left.node_id != -1:
         #g.vs[node.node_id]["name"] = "%s" % (tree.columns[node.feature_id])
         g.add_edges([(node.node_id, node.left.node_id)])
@@ -17,7 +19,7 @@ def bfs(node, g, tree):
 
 def draw_decision_tree(tree):
     g = Graph()
-    g.add_vertices(tree.nodesCnt + 1)
+    g.add_vertices(tree.nodesCnt)
     bfs(tree.root, g, tree)
     g.vs["label"] = g.vs["name"]
     layout = g.layout("kamada_kawai")

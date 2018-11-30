@@ -30,6 +30,9 @@ class Decisive_Tree:
         self.valid = np.asarray(self.values[int((train_ratio*n)/all_ratio):int(((train_ratio+valid_ratio)*n)/all_ratio)])
         self.test = np.asarray(self.values[int(((train_ratio+valid_ratio)*n)/all_ratio):])
 
+    def set_dataset(self, train, valid, test):
+        self.train, self.valid, self.test = train, valid, train
+
     def get_distro(self, data):
         labels = data[:,-1]
         return np.divide(np.unique(labels, return_counts=True)[1], labels.size)

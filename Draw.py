@@ -5,7 +5,8 @@ from igraph import Graph, plot
 def bfs(node, g, tree):
     if node == None:
         return
-    g.vs[node.node_id]["name"] = "%s" % (tree.columns[node.feature_id])
+    #g.vs[node.node_id]["name"] = "%s" % (tree.columns[node.feature_id])
+    g.vs[node.node_id]["name"] = "%d" % (node.node_id)    
     #if node.left is not None and node.right is not None:
     #    print(node.left.node_id, " ", node.right.node_id)
     if node.left != None and node.left.node_id != -1:

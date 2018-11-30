@@ -6,7 +6,8 @@ class Decisive_Tree:
         self.file = file
         self.columns, self.used_in_tree = [], []
         self.values, self.train, self.valid, self.test = np.array([]), np.array([]), np.array([]), np.array([])
-        self.features, self.root, self.nodesCnt, self.threshold = 0, 0, 0, 8
+        self.features, self.root, self.nodesCnt, self.threshold = 0, 0, 0, 10
+        self.to_preserve, self.to_remove = 0, 1
         self.root = None
 
     def create_dataset(self, train_ratio=5, valid_ratio=1, test_ratio=1):
@@ -16,7 +17,7 @@ class Decisive_Tree:
             self.columns = [str(el.replace('"', '')) for el in splitted_lines[0]]
             self.features = len(splitted_lines[0]) - 1
             self.used_in_tree = [False] * self.features
-            for line in splitted_lines[1:5000]:
+            for line in splitted_lines[1:]:
                 line = [float(el) for el in line]
                 self.values = np.asarray(line) if self.values.size == 0 else np.vstack((self.values, np.asarray(line)))
         self.extract_datasets(train_ratio, valid_ratio, test_ratio)
@@ -40,11 +41,6 @@ class Decisive_Tree:
     def information_gain(self, val, fea_id, entropy, data):
         smaller = data[np.where(data[:,fea_id]<=val)]
         greater = data[np.where(data[:,fea_id]>val)]
-        #column = data[:,fea_id]
-        #smaller1 = column[np.where(column <= val)]
-        #greater1 = column[np.where(column > val)] # np.unique?
-        #smaller = data[np.in1d(data[:, fea_id], smaller1)]
-        #greater = data[np.in1d(data[:, fea_id], greater1)]
         prob_smaller = smaller.shape[0] / (smaller.shape[0] + greater.shape[0])
         prob_greater = greater.shape[0] / (smaller.shape[0] + greater.shape[0])
         s_entropy = self.compute_entropy(smaller)
@@ -89,6 +85,8 @@ class Decisive_Tree:
         node.set_all(data[split_id][fea_id], fea_id, self.nodesCnt, data)
         self.nodesCnt += 1
 
+    # chyba tutaj jest bug, zapewne chodzi o to, ze jak data = [] to daje continue, a nie tworze node
+    # czyli musze uznac, ze taka sytuacja jest poprawna
     def create_tree(self):
         split_id, fea_id, s, g = self.feature_choice(self.train, self.used_in_tree)
         self.set_root_node(split_id, fea_id)
@@ -99,9 +97,9 @@ class Decisive_Tree:
             node, side, data, depth = que.get()
             if depth > self.threshold or not len(data):
                 continue
-            node.create_left(node.get_used()) if side == 'l' else node.create_right(node.get_used())
+            node.create_left(node.used_already) if side == 'l' else node.create_right(node.used_already)
             node = node.left if side == 'l' else node.right
-            split_id, fea_id, s, g = self.feature_choice(data, node.get_used())
+            split_id, fea_id, s, g = self.feature_choice(data, node.used_already)
             self.setup_node(data, node, split_id, fea_id)
             que.put((node, 'l', s, depth+1))
             que.put((node, 'r', g, depth+1))
@@ -109,15 +107,15 @@ class Decisive_Tree:
     def calculate_accuracy(self, result, predicted_result):
         return np.sum(result == predicted_result)/result.size
     
-    def set_node(self, t, fea_id):
+    def set_next_node(self, t, fea_id):
         if t.left is None or t.right is None:
             return t.left if t.right is None else t.right
         else:
             return t.right if fea_id > t.threshold else t.left
 
-    def evaluate_tree(self):
+    def evaluate_tree(self, test_data):
         predicted_result, result = [], []
-        for sample in self.test:
+        for sample in test_data:
             t = self.root
             while True:
                 if t.left is None and t.right is None:
@@ -126,9 +124,54 @@ class Decisive_Tree:
                     predicted_result.append(int(label))
                     break
                 else:
-                    t = self.set_node(t, sample[t.feature_id])
+                    t = self.set_next_node(t, sample[t.feature_id])
         result, predicted_result = np.asarray(result), np.asarray(predicted_result)
-        return ("Accuracy obtained on test data is %f" % self.calculate_accuracy(result, predicted_result), result, predicted_result)
+        accuracy = self.calculate_accuracy(result, predicted_result)
+        return ("Accuracy obtained on test data is %f" % accuracy, accuracy, result, predicted_result)
 
-    def prune_tree(self):
-        pass
+    def next_nodes_are_leaves(self, left_node, right_node):
+        if left_node and not (left_node.left is None and left_node.right is None):
+            return False
+        if right_node and not (right_node.left is None and right_node.right is None):
+            return False
+        return True
+
+    def get_nodes_with_leaves(self, node, nodes_with_leaves):
+        if node is None or (node.left is None and node.right is None): # czy porzebne
+            return
+        if self.next_nodes_are_leaves(node.left, node.right):
+            nodes_with_leaves.append(node)
+            return
+        self.get_nodes_with_leaves(node.left, nodes_with_leaves)
+        self.get_nodes_with_leaves(node.right, nodes_with_leaves)
+
+    def cut_or_not(self, node, eps):
+        info, acc, *_ = self.evaluate_tree(self.valid)
+        left_node, right_node = node.left, node.right
+        node.left, node.right = None, None
+        info, acc2, *_ = self.evaluate_tree(self.valid) 
+        #print(eps, acc2, acc)
+        if not (acc2 >= acc + eps):
+            node.left, node.right = left_node, right_node
+        return self.to_remove if acc2 >= acc + eps else self.to_preserve
+    
+    def count_nodes(self, node, cnt):
+        cnt[0] += 1
+        if node.left:
+            self.count_nodes(node.left, cnt)
+        if node.right:
+            self.count_nodes(node.right, cnt)
+
+    def prune_tree(self, eps = 0):
+        print("Before {}".format(self.nodesCnt))
+        while True:
+            nodes_before_leaves = []
+            self.get_nodes_with_leaves(self.root, nodes_before_leaves)
+            nodes_with_leaves = np.asarray(nodes_before_leaves)
+            func = np.vectorize(self.cut_or_not)
+            result_array = func(nodes_with_leaves, eps)
+            if not self.to_remove in result_array:
+                return
+        cnt = [0, 0]
+        count_nodes(self.root, cnt)
+        print("After {}".format(cnt[0]))

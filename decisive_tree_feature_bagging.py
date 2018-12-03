@@ -5,33 +5,21 @@ class DecisiveTreeFeatureBagging:
     def __init__(self, file):
         self.file = file
         self.columns, self.used_in_tree = [], []
-        self.values, self.train, self.valid, self.test = np.array([]), np.array([]), np.array([]), np.array([])
-        self.features, self.root, self.nodesCnt, self.threshold = 0, 0, 0, 10
+        self.weights, self.train, self.valid, self.test = {}, np.array([]), np.array([]), np.array([])
+        self.features, self.root, self.nodesCnt, self.threshold = 0, 0, 0, 11
         self.to_preserve, self.to_remove = 0, 1
         self.root = None
 
-    def create_dataset(self, train_ratio=5, valid_ratio=1, test_ratio=1):
-        with open(self.file) as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter=',')
-            splitted_lines = [x[0].split(';') for x in csv_reader]
-            self.columns = [str(el.replace('"', '')) for el in splitted_lines[0]]
-            self.features = len(splitted_lines[0]) - 1
-            self.used_in_tree = [False] * self.features
-            for line in splitted_lines[1:]:
-                line = [float(el) for el in line]
-                self.values = np.asarray(line) if self.values.size == 0 else np.vstack((self.values, np.asarray(line)))
-        self.extract_datasets(train_ratio, valid_ratio, test_ratio)
-        
-    def extract_datasets(self, train_ratio, valid_ratio, test_ratio):
-        n = self.values.shape[0]
-        all_ratio = train_ratio + test_ratio + valid_ratio
-        np.random.shuffle(self.values)
-        self.train = np.asarray(self.values[:int((train_ratio*n)/all_ratio)])
-        self.valid = np.asarray(self.values[int((train_ratio*n)/all_ratio):int(((train_ratio+valid_ratio)*n)/all_ratio)])
-        self.test = np.asarray(self.values[int(((train_ratio+valid_ratio)*n)/all_ratio):])
-
     def set_dataset(self, train, valid, test):
         self.train, self.valid, self.test = train, valid, train
+        unq, cnts = np.unique(self.train[:,-1], return_counts=True)
+        occurences = dict(zip(unq, cnts))
+        #mini = occurences[0][1]
+        #print([m.log(v[1], 2) for i,v in enumerate(occurences)])
+        self.weights = {}
+        for i,v in occurences.items():
+            self.weights[i] = 2200/(len(occurences)*v)
+        #self.weights = {v[0]:((10*mini)/v[1])+(1.0/(1 + m.log(v[1], 2))) for i,v in enumerate(occurences)}
         self.features = 11
         self.used_in_tree = [False] * self.features
 
@@ -57,11 +45,10 @@ class DecisiveTreeFeatureBagging:
         thres, samples = self.features, data.shape[0]
         entropy = self.compute_entropy(data)
         for fea_id in avail_features:
-            if not used_already[fea_id]: # niepotrzebne na 99.99%
-                for split_id in range(samples):
-                    inf_gain = self.information_gain(data[split_id, fea_id], fea_id, entropy, data)
-                    if maxIG[0] < inf_gain[0]:
-                        maxIG = (inf_gain[0], split_id, fea_id, inf_gain[1], inf_gain[2])
+            for split_id in range(samples):
+                inf_gain = self.information_gain(data[split_id, fea_id], fea_id, entropy, data)
+                if maxIG[0] < inf_gain[0]:
+                    maxIG = (inf_gain[0], split_id, fea_id, inf_gain[1], inf_gain[2])
         used_already[maxIG[2]] = True
         return maxIG[1:]
 
@@ -77,11 +64,17 @@ class DecisiveTreeFeatureBagging:
 
     def get_available_features(self, already_used_features):
         avail_features = [i for i,v in enumerate(already_used_features) if not v]
-        sample_to_choose = m.ceil(m.sqrt(len(avail_features)))
+        formula = m.ceil(m.sqrt(len(avail_features)))
+        sample_to_choose = formula if formula > 0 else 1
         return np.random.choice(avail_features, sample_to_choose, replace=False)
-   
+    
+    def get_available_features2(self, already_used_features):
+        formula = m.ceil(m.sqrt(11))
+        sample_to_choose = formula if formula > 0 else 1
+        return np.random.choice(list(range(0,11)), sample_to_choose, replace=False)
+
     def create_tree_feature_bagging(self):
-        avail_features = self.get_available_features(self.used_in_tree)
+        avail_features = self.get_available_features2(self.used_in_tree)
         split_id, fea_id, s, g = self.feature_choice_feature_bagging(self.train,
             self.used_in_tree, avail_features)
         self.set_root_node(split_id, fea_id)
@@ -90,11 +83,13 @@ class DecisiveTreeFeatureBagging:
         que.put((self.root, 'r', g, 1))
         while not que.empty():
             node, side, data, depth = que.get()
-            if depth > self.threshold or not len(data):
+            if depth > self.threshold or len(data) == 0:
+                continue
+            if (data[:,-1] == data[0,-1]).sum() == len(data):
                 continue
             node.create_left(node.used_already) if side == 'l' else node.create_right(node.used_already)
             node = node.left if side == 'l' else node.right
-            avail_features = self.get_available_features(node.used_already)
+            avail_features = self.get_available_features2(node.used_already)
             split_id, fea_id, s, g = self.feature_choice_feature_bagging(data,
                 node.used_already, avail_features)
             self.setup_node(data, node, split_id, fea_id)
@@ -113,7 +108,18 @@ class DecisiveTreeFeatureBagging:
     def evaluate_one_sample(self, node, sample):
         while True:
             if node.left is None and node.right is None:
-                label = np.argmax(np.bincount(node.labels))
+                #label = np.argmax(np.bincount(node.labels))
+                uniq, cnts = np.unique(node.labels, return_counts=True)
+                to_search = np.array(list(zip(uniq, cnts)))
+                for i,v in enumerate(to_search):
+                    to_search[i][1] = to_search[i][1] * self.weights[to_search[i][0]]
+                    to_search[i][1] = to_search[i][1] - (2*to_search[i][1])
+                label = sorted(to_search, key=lambda v: v[1])[-1][0]
+                #print(dict(zip(uniq, cnts)))
+                #label = sorted([(l, c*self.weights[l]) for l,c in list(zip(uniq, cnts))], key=lambda v: v[1])[-1][0]
+                #print(sorted([(l, c*self.weights[l]) for l,c in list(zip(uniq, cnts))], key=lambda v: v[1]))
+                #print("Possible labels... ", dict(zip(uniq, cnts)))
+                #print("Desired label... ", sample[-1])
                 return int(sample[-1]), int(label)
             else:
                 node = self.set_next_node(node, sample[node.feature_id])
@@ -138,50 +144,3 @@ class DecisiveTreeFeatureBagging:
         result, predicted_result = np.asarray(result), np.asarray(predicted_result)
         accuracy = self.calculate_accuracy(result, predicted_result)
         return ("Accuracy obtained on test data is %f" % accuracy, accuracy, result, predicted_result)
-
-    def next_nodes_are_leaves(self, left_node, right_node):
-        if left_node and not (left_node.left is None and left_node.right is None):
-            return False
-        if right_node and not (right_node.left is None and right_node.right is None):
-            return False
-        return True
-
-    def get_nodes_with_leaves(self, node, nodes_with_leaves):
-        if node is None or (node.left is None and node.right is None):
-            return
-        if self.next_nodes_are_leaves(node.left, node.right):
-            nodes_with_leaves.append(node)
-            return
-        self.get_nodes_with_leaves(node.left, nodes_with_leaves)
-        self.get_nodes_with_leaves(node.right, nodes_with_leaves)
-
-    def cut_or_not(self, node, eps):
-        info, acc, *_ = self.evaluate_tree(self.valid)
-        left_node, right_node = node.left, node.right
-        node.left, node.right = None, None
-        info, acc2, *_ = self.evaluate_tree(self.valid) 
-        #print(eps, acc2, acc)
-        if not (acc2 >= acc + eps):
-            node.left, node.right = left_node, right_node
-        return self.to_remove if acc2 >= acc + eps else self.to_preserve
-    
-    def count_nodes(self, node, cnt):
-        cnt[0] += 1
-        if node.left:
-            self.count_nodes(node.left, cnt)
-        if node.right:
-            self.count_nodes(node.right, cnt)
-
-    def prune_tree(self, eps = 0):
-        print("Before {}".format(self.nodesCnt))
-        while True:
-            nodes_before_leaves = []
-            self.get_nodes_with_leaves(self.root, nodes_before_leaves)
-            nodes_with_leaves = np.asarray(nodes_before_leaves)
-            func = np.vectorize(self.cut_or_not)
-            result_array = func(nodes_with_leaves, eps)
-            if not self.to_remove in result_array:
-                return
-        cnt = [0, 0]
-        count_nodes(self.root, cnt)
-        print("After {}".format(cnt[0]))

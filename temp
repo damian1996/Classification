@@ -1,0 +1,9 @@
+#balanced random forest (brf)
+labels, _ = np.unique(self.train[:, -1], return_counts = True)
+smaller_train = np.array([])
+for i in labels:
+    if i==3 or i==4 or i==8:
+        fit = self.train[np.where(self.train[:, self.features] == i)]
+        part_for_fit = fit[np.random.choice(np.arange(fit.shape[0]), self.samples_per_tree/len(labels), replace=True)]
+    smaller_train = part_for_fit if smaller_train.size == 0 else np.vstack((smaller_train, part_for_fit))
+print(len(smaller_train))

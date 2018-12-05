@@ -7,7 +7,7 @@ if __name__ == '__main__':
     if len(sys.argv) != 2:
         sys.exit()
     results_sum, required = 0.0, 0.500000
-    samples, better_than_required = 10, 0
+    samples, better_than_required = 5, 0
     custom_split = False
     print("Do you want to enter proportions?\nDefault = 0\nCustom = 1")
     if int(sys.stdin.readline()):
@@ -23,7 +23,7 @@ if __name__ == '__main__':
         tree.prune_tree(eps=0.0003)
         #draw_decision_tree(tree)
         info, accuracy, res_labels, predicted_labels = tree.evaluate_tree(tree.test)
-        #draw_plot_for_labels(result, res_labels, predicted_labels)
+        #draw_plot_for_labels(res_labels, predicted_labels)
         print(info)
         results_sum += accuracy
         if accuracy >= required:

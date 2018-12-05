@@ -77,8 +77,6 @@ class DecisiveTreeFeatureBagging:
             node, side, data, depth = que.get()
             if depth > self.threshold or len(data) == 0:
                 continue
-            #if (data[:,-1] == data[0,-1]).sum() == len(data):
-            #    continue
             node.create_left(node.used_already) if side == 'l' else node.create_right(node.used_already)
             node = node.left if side == 'l' else node.right
             avail_features = self.get_available_features2(node.used_already)
@@ -96,7 +94,7 @@ class DecisiveTreeFeatureBagging:
             return t.left if t.right is None else t.right
         else:
             return t.right if fea_id > t.threshold else t.left
-
+    
     def evaluate_one_sample(self, node, sample):
         while True:
             if node.left is None and node.right is None:

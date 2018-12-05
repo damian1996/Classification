@@ -7,7 +7,7 @@ from joblib import Parallel, delayed
 class RandomForest:
     def __init__(self, file):
         self.file = file
-        self.card_forest, self.samples_per_tree = 100, 2200
+        self.card_forest, self.samples_per_tree = 50, 2200
         self.feature_bagging = np.array((self.samples_per_tree, self.card_forest))
         self.values, self.train, self.valid, self.test = np.array([]), np.array([]), np.array([]), np.array([])
         self.forest = [DecisiveTreeFeatureBagging(file) for _ in range(self.card_forest)]
@@ -41,10 +41,9 @@ class RandomForest:
 
     def create_random_forest(self):
         for i in range(self.card_forest):
-            print(i)
             self.create_tree(self.forest[i])
             self.evaluate_random_forest(i+1)
-            #draw_decision_tree(self.forest[i])
+            draw_decision_tree(self.forest[i])
     
     def calculate_accuracy(self, result, predicted_result):
         return np.sum(result == predicted_result)/result.size
@@ -82,8 +81,6 @@ class RandomForest:
                 pred_good[real] += 1
             else:
                 pred_bad[real] += 1
-            #pred_result.append(thr)
-            #pred_result.append(np.argmax(np.bincount(np.asarray(res_for_sample))))
         print("First measure better {} times".format(fr_better))
         print("Third measure better {} times".format(thr_better))
         print("Good predictions ", pred_good)

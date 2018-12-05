@@ -7,7 +7,7 @@ class Node:
         self.used_already = used_already
         self.labels = np.array([])
         self.left, self.right = None, None
-        self.prune_flag = False
+        self.prune_flag = True
     def __repr__(self):
         return 'Node %d' % self.node_id
         #return 'Node for %d feature' % self.feature_id

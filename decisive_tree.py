@@ -52,11 +52,11 @@ class Decisive_Tree:
         thres, samples = self.features, data.shape[0]
         entropy = self.compute_entropy(data)
         for fea_id in range(self.features):
-            if not used_already[fea_id]:
-                for split_id in range(samples):
-                    inf_gain = self.information_gain(data[split_id, fea_id], fea_id, entropy, data)
-                    if maxIG[0] < inf_gain[0]:
-                        maxIG = (inf_gain[0], split_id, fea_id, inf_gain[1], inf_gain[2])
+            #if not used_already[fea_id]:
+            for split_id in range(samples):
+                inf_gain = self.information_gain(data[split_id, fea_id], fea_id, entropy, data)
+                if maxIG[0] < inf_gain[0]:
+                    maxIG = (inf_gain[0], split_id, fea_id, inf_gain[1], inf_gain[2])
         used_already[maxIG[2]] = True
         return maxIG[1:]
 
@@ -69,11 +69,6 @@ class Decisive_Tree:
         node.used_feature(fea_id)
         node.set_all(data[split_id][fea_id], fea_id, self.nodesCnt, data)
         self.nodesCnt += 1
-
-    def get_available_features(self, already_used_features):
-        avail_features = [i for i,v in enumerate(already_used_features) if not v]
-        sample_to_choose = m.ceil(m.sqrt(len(avail_features)))
-        return np.random.choice(avail_features, sample_to_choose, replace=False)
 
     def create_tree(self):
         split_id, fea_id, s, g = self.feature_choice(self.train, self.used_in_tree)
@@ -128,7 +123,7 @@ class Decisive_Tree:
         return True
 
     def get_nodes_with_leaves(self, node, nodes_with_leaves):
-        if node is None or (node.left is None and node.right is None):
+        if node is None or (node.left is None and node.right is None) or not node.prune_flag:
             return
         if self.next_nodes_are_leaves(node.left, node.right):
             nodes_with_leaves.append(node)
@@ -143,23 +138,17 @@ class Decisive_Tree:
         info, acc2, *_ = self.evaluate_tree(self.valid) 
         if not (acc2 >= acc + eps):
             node.left, node.right = left_node, right_node
+        node.prune_flag = False if acc2 < acc + eps else True
         return self.to_remove if acc2 >= acc + eps else self.to_preserve
     
-    def count_nodes(self, node, cnt):
-        cnt[0] += 1
-        if node.left:
-            self.count_nodes(node.left, cnt)
-        if node.right:
-            self.count_nodes(node.right, cnt)
-
     def prune_tree(self, eps = 0):
         while True:
             nodes_before_leaves = []
             self.get_nodes_with_leaves(self.root, nodes_before_leaves)
+            if nodes_before_leaves == []:
+                return
             nodes_with_leaves = np.asarray(nodes_before_leaves)
             func = np.vectorize(self.cut_or_not)
             result_array = func(nodes_with_leaves, eps)
-            if not self.to_remove in result_array:
+            if not np.any(result_array == self.to_remove):
                 return
-        cnt = [0, 0]
-        count_nodes(self.root, cnt)

@@ -12,14 +12,6 @@ class DecisiveTreeFeatureBagging:
 
     def set_dataset(self, train, valid, test):
         self.train, self.valid, self.test = train, valid, train
-        unq, cnts = np.unique(self.train[:,-1], return_counts=True)
-        occurences = dict(zip(unq, cnts))
-        #mini = occurences[0][1]
-        #print([m.log(v[1], 2) for i,v in enumerate(occurences)])
-        self.weights = {}
-        for i,v in occurences.items():
-            self.weights[i] = 2200/(len(occurences)*v)
-        #self.weights = {v[0]:((10*mini)/v[1])+(1.0/(1 + m.log(v[1], 2))) for i,v in enumerate(occurences)}
         self.features = 11
         self.used_in_tree = [False] * self.features
 
@@ -85,8 +77,8 @@ class DecisiveTreeFeatureBagging:
             node, side, data, depth = que.get()
             if depth > self.threshold or len(data) == 0:
                 continue
-            if (data[:,-1] == data[0,-1]).sum() == len(data):
-                continue
+            #if (data[:,-1] == data[0,-1]).sum() == len(data):
+            #    continue
             node.create_left(node.used_already) if side == 'l' else node.create_right(node.used_already)
             node = node.left if side == 'l' else node.right
             avail_features = self.get_available_features2(node.used_already)
@@ -108,18 +100,7 @@ class DecisiveTreeFeatureBagging:
     def evaluate_one_sample(self, node, sample):
         while True:
             if node.left is None and node.right is None:
-                #label = np.argmax(np.bincount(node.labels))
-                uniq, cnts = np.unique(node.labels, return_counts=True)
-                to_search = np.array(list(zip(uniq, cnts)))
-                for i,v in enumerate(to_search):
-                    to_search[i][1] = to_search[i][1] * self.weights[to_search[i][0]]
-                    to_search[i][1] = to_search[i][1] - (2*to_search[i][1])
-                label = sorted(to_search, key=lambda v: v[1])[-1][0]
-                #print(dict(zip(uniq, cnts)))
-                #label = sorted([(l, c*self.weights[l]) for l,c in list(zip(uniq, cnts))], key=lambda v: v[1])[-1][0]
-                #print(sorted([(l, c*self.weights[l]) for l,c in list(zip(uniq, cnts))], key=lambda v: v[1]))
-                #print("Possible labels... ", dict(zip(uniq, cnts)))
-                #print("Desired label... ", sample[-1])
+                label = np.argmax(np.bincount(node.labels))
                 return int(sample[-1]), int(label)
             else:
                 node = self.set_next_node(node, sample[node.feature_id])
@@ -131,16 +112,6 @@ class DecisiveTreeFeatureBagging:
             sample_label, pred_label = self.evaluate_one_sample(t, sample)
             result.append(sample_label)
             predicted_result.append(pred_label)
-            '''
-            while True:
-                if t.left is None and t.right is None:
-                    label = np.argmax(np.bincount(t.labels))                    
-                    result.append(int(sample[-1]))
-                    predicted_result.append(int(label))
-                    break
-                else:
-                    t = self.set_next_node(t, sample[t.feature_id])
-            '''
         result, predicted_result = np.asarray(result), np.asarray(predicted_result)
         accuracy = self.calculate_accuracy(result, predicted_result)
         return ("Accuracy obtained on test data is %f" % accuracy, accuracy, result, predicted_result)

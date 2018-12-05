@@ -12,12 +12,15 @@ if __name__ == '__main__':
     
     print("Do you want to enter proportions?\nDefault = 0\nCustom = 1")
     if int(sys.stdin.readline()):
-            print("Enter train_ratio, test_ratio and valid_ratio for data:")
+            print("Enter train_ratio, valid_ratio and test_ratio for data:")
             train_ratio, valid_ratio, test_ratio = map(int, sys.stdin.readline().split())
             custom_split = True
     
     rf = RandomForest(sys.argv[1])
-    rf.create_dataset()
+    if custom_split:
+        rf.create_dataset(train_ratio, valid_ratio, test_ratio)
+    else:
+        rf.create_dataset()
     rf.create_random_forest()
     info, accuracy, res_labels, predicted_labels = rf.evaluate_random_forest()
     print(info)

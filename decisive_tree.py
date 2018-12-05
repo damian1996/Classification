@@ -53,25 +53,10 @@ class Decisive_Tree:
         entropy = self.compute_entropy(data)
         for fea_id in range(self.features):
             if not used_already[fea_id]:
-                '''
-                inf_gain = np.vectorize(lambda y: (y[0], y[1])) #(self.information_gain(y[1], fea_id, entropy, data), y[0])
-                result_inf_gain = inf_gain(np.dstack((np.arange(samples), data[:,fea_id])))
-                print(result_inf_gain)
-                ig = np.amax(result_inf_gain, axis=0)
-                if maxIG[0] < ig[0][0]:
-                    maxIG = (ig[0][0], ig[1], fea_id, ig[0][1], ig[0][2])
-                '''
                 for split_id in range(samples):
                     inf_gain = self.information_gain(data[split_id, fea_id], fea_id, entropy, data)
                     if maxIG[0] < inf_gain[0]:
                         maxIG = (inf_gain[0], split_id, fea_id, inf_gain[1], inf_gain[2])
-        '''
-        for split_id, fea_id in np.ndindex(data.shape): # byc moze po prostu podwojna petla bedzie miala lepszy performance
-            if fea_id < thres and not used_already[fea_id]: # wtedy mniej tych ifow, potem zmienie
-                inf_gain = self.information_gain(data[split_id, fea_id], split_id, fea_id, entropy, data)
-                if maxIG[0] < inf_gain[0]:
-                    maxIG = (inf_gain[0], split_id, fea_id, inf_gain[1], inf_gain[2])
-        '''
         used_already[maxIG[2]] = True
         return maxIG[1:]
 
@@ -90,8 +75,6 @@ class Decisive_Tree:
         sample_to_choose = m.ceil(m.sqrt(len(avail_features)))
         return np.random.choice(avail_features, sample_to_choose, replace=False)
 
-    # chyba tutaj jest bug, zapewne chodzi o to, ze jak data = [] to daje continue, a nie tworze node
-    # czyli musze uznac, ze taka sytuacja jest poprawna
     def create_tree(self):
         split_id, fea_id, s, g = self.feature_choice(self.train, self.used_in_tree)
         self.set_root_node(split_id, fea_id)
@@ -133,19 +116,9 @@ class Decisive_Tree:
             sample_label, pred_label = self.evaluate_one_sample(t, sample)
             result.append(sample_label)
             predicted_result.append(pred_label)
-            '''
-            while True:
-                if t.left is None and t.right is None:
-                    label = np.argmax(np.bincount(t.labels))                    
-                    result.append(int(sample[-1]))
-                    predicted_result.append(int(label))
-                    break
-                else:
-                    t = self.set_next_node(t, sample[t.feature_id])
-            '''
         result, predicted_result = np.asarray(result), np.asarray(predicted_result)
         accuracy = self.calculate_accuracy(result, predicted_result)
-        return ("Accuracy obtained on test data is %f" % accuracy, accuracy, result, predicted_result)
+        return ("Accuracy obtained on test data is %f" % (accuracy*100), accuracy, result, predicted_result)
 
     def next_nodes_are_leaves(self, left_node, right_node):
         if left_node and not (left_node.left is None and left_node.right is None):
@@ -168,7 +141,6 @@ class Decisive_Tree:
         left_node, right_node = node.left, node.right
         node.left, node.right = None, None
         info, acc2, *_ = self.evaluate_tree(self.valid) 
-        #print(eps, acc2, acc)
         if not (acc2 >= acc + eps):
             node.left, node.right = left_node, right_node
         return self.to_remove if acc2 >= acc + eps else self.to_preserve
@@ -181,7 +153,6 @@ class Decisive_Tree:
             self.count_nodes(node.right, cnt)
 
     def prune_tree(self, eps = 0):
-        print("Before {}".format(self.nodesCnt))
         while True:
             nodes_before_leaves = []
             self.get_nodes_with_leaves(self.root, nodes_before_leaves)
@@ -192,4 +163,3 @@ class Decisive_Tree:
                 return
         cnt = [0, 0]
         count_nodes(self.root, cnt)
-        print("After {}".format(cnt[0]))

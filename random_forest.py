@@ -7,7 +7,7 @@ from joblib import Parallel, delayed
 class RandomForest:
     def __init__(self, file):
         self.file = file
-        self.card_forest, self.samples_per_tree = 30, 2200
+        self.card_forest, self.samples_per_tree = 100, 2200
         self.feature_bagging = np.array((self.samples_per_tree, self.card_forest))
         self.values, self.train, self.valid, self.test = np.array([]), np.array([]), np.array([]), np.array([])
         self.forest = [DecisiveTreeFeatureBagging(file) for _ in range(self.card_forest)]
@@ -38,12 +38,8 @@ class RandomForest:
             self.samples_per_tree, replace=True)]
         tree.set_dataset(smaller_train, self.valid, self.test)
         tree.create_tree_feature_bagging()
-        #tree.prune_tree(eps=0.0003)
 
     def create_random_forest(self):
-        # jak by to zrownoleglic...
-        #i in range(self.card_forest))
-        #Parallel(n_jobs=4)(delayed(self.create_tree)(self.forest[i], i) for i in range(self.card_forest))
         for i in range(self.card_forest):
             print(i)
             self.create_tree(self.forest[i])

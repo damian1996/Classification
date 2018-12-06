@@ -19,6 +19,6 @@ if __name__ == '__main__':
     rf = RandomForest(sys.argv[1])
     rf.create_dataset() if not custom_split else rf.create_dataset(train_ratio, valid_ratio, test_ratio)
     rf.create_random_forest()
-    info, accuracy, res_labels, predicted_labels = rf.evaluate_random_forest()
+    info, accuracy, res_labels, predicted_labels = rf.evaluate_random_forest(rf.card_forest)
     print(info)
 

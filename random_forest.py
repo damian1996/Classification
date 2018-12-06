@@ -7,7 +7,7 @@ from joblib import Parallel, delayed
 class RandomForest:
     def __init__(self, file):
         self.file = file
-        self.card_forest, self.samples_per_tree = 50, 2200
+        self.card_forest, self.samples_per_tree = 25, 2200
         self.feature_bagging = np.array((self.samples_per_tree, self.card_forest))
         self.values, self.train, self.valid, self.test = np.array([]), np.array([]), np.array([]), np.array([])
         self.forest = [DecisiveTreeFeatureBagging(file) for _ in range(self.card_forest)]
@@ -41,48 +41,33 @@ class RandomForest:
 
     def create_random_forest(self):
         for i in range(self.card_forest):
+            print("Creating tree {}".format(i+1))
             self.create_tree(self.forest[i])
             self.evaluate_random_forest(i+1)
-            draw_decision_tree(self.forest[i])
     
     def calculate_accuracy(self, result, predicted_result):
-        return np.sum(result == predicted_result)/result.size
-
-    def two_most_frequent_probs(self, arr):
-        bc = np.bincount(arr)
-        return bc[-1]/len(arr), bc[-2]/len(arr)
+        return np.sum(result == predicted_result) / float(result.size)
 
     def evaluate_random_forest(self, nr_trees):
         result, pred_result = [], []
-        thr_better, fr_better = 0, 0
         labels = self.test[:,-1]
         unique, counts = np.unique(labels, return_counts=True)
-        pred_good = {k:0 for k in unique}
-        pred_bad = {k:0 for k in unique}
+        pred_good, pred_bad = {k:0 for k in unique}, {k:0 for k in unique}
+        print()
         print("All labels ", dict(zip(unique, counts)))
-        for i, sample in enumerate(self.test):
+        for sample in self.test:
             res_for_sample = []
-            for j in range(nr_trees): # self.card_forest
+            for j in range(nr_trees):
                 t = self.forest[j].root
                 real, pred = self.forest[j].evaluate_one_sample(t, sample)
                 res_for_sample.append(pred)
-            prob = res_for_sample.count(real)/len(res_for_sample)
-            arr = np.asarray(res_for_sample)
-            first, second = self.two_most_frequent_probs(arr)
-            fr = np.argmax(np.bincount(arr))
-            thr = round(np.sum(arr)/arr.size)
-            if fr == real and thr != real:
-                fr_better += 1
-            elif fr != real and thr == real:
-                thr_better += 1
+            majority = np.argmax(np.bincount(np.asarray(res_for_sample)))
             result.append(real)
-            pred_result.append(fr)
-            if real == fr:
+            pred_result.append(majority)
+            if real == majority:
                 pred_good[real] += 1
             else:
                 pred_bad[real] += 1
-        print("First measure better {} times".format(fr_better))
-        print("Third measure better {} times".format(thr_better))
         print("Good predictions ", pred_good)
         print("Bad predictions ", pred_bad)
         result, predicted_result = np.asarray(result), np.asarray(pred_result)
